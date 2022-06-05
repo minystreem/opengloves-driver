@@ -7,7 +7,6 @@
 #include "DeviceConfiguration.h"
 #include "DeviceDriver/DeviceDriver.h"
 #include "Encode/EncodingManager.h"
-#include "ForceFeedback.h"
 #include "openvr_driver.h"
 
 enum class KnuckleDeviceComponentIndex : int {
@@ -39,12 +38,7 @@ enum class KnuckleDeviceComponentIndex : int {
 
 class KnuckleDeviceDriver : public DeviceDriver {
  public:
-  KnuckleDeviceDriver(
-      std::unique_ptr<CommunicationManager> communicationManager,
-      std::shared_ptr<BoneAnimator> boneAnimator,
-      std::string serialNumber,
-      bool approximateThumb,
-      VRDeviceConfiguration configuration);
+  KnuckleDeviceDriver(VRDeviceConfiguration configuration);
 
   void HandleInput(VRInputData data) override;
   void SetupProps(vr::PropertyContainerHandle_t& props) override;
@@ -53,7 +47,4 @@ class KnuckleDeviceDriver : public DeviceDriver {
 
  private:
   vr::VRInputComponentHandle_t inputComponentHandles_[static_cast<int>(KnuckleDeviceComponentIndex::_Count)];
-  vr::VRInputComponentHandle_t haptic_;
-  std::unique_ptr<FFBListener> ffbProvider_;
-  bool approximateThumb_;
 };

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <memory>
 
@@ -9,9 +10,12 @@
 
 class NamedPipeCommunicationManager : public CommunicationManager {
  public:
-  NamedPipeCommunicationManager(VRNamedPipeInputConfiguration configuration, const VRDeviceConfiguration& deviceConfiguration);
+  NamedPipeCommunicationManager(const VRCommunicationConfiguration& configuration);
   bool IsConnected() override;
-  void QueueSend(const VRFFBData& data) override{};
+
+  // no sending for named pipes
+  void QueueSend(const VROutput& data) override{};
+  void BeginListener(const std::function<void(VRInputData)>& callback) override;
 
  protected:
   bool Connect() override;
@@ -27,13 +31,12 @@ class NamedPipeCommunicationManager : public CommunicationManager {
     return true;
   };
 
-  void BeginListener(const std::function<void(VRInputData)>& callback) override;
-
  private:
-  std::unique_ptr<NamedPipeListener<VRInputData>> namedPipeListener_;
   std::atomic<bool> isConnected_;
 
   std::function<void(VRInputData)> callback_;
 
-  VRNamedPipeInputConfiguration configuration_;
+  VRCommunicationNamedPipeConfiguration namedPipeConfiguration_;
+
+  std::vector<std::unique_ptr<IListener>> namedPipeListeners_;
 };

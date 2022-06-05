@@ -1,13 +1,19 @@
 #include "Communication/NamedPipeCommunicationManager.h"
 
+#include <regex>
 #include <utility>
 
-NamedPipeCommunicationManager::NamedPipeCommunicationManager(
-    VRNamedPipeInputConfiguration configuration, const VRDeviceConfiguration& deviceConfiguration)
-    : CommunicationManager(deviceConfiguration), isConnected_(false), configuration_(std::move(configuration)){};
+NamedPipeCommunicationManager::NamedPipeCommunicationManager(const VRCommunicationConfiguration& configuration)
+    : CommunicationManager(configuration), namedPipeConfiguration_(std::get<VRCommunicationNamedPipeConfiguration>(configuration.configuration)){};
 
 bool NamedPipeCommunicationManager::Connect() {
-  namedPipeListener_ = std::make_unique<NamedPipeListener<VRInputData>>(configuration_.pipeName);
+  namedPipeListeners_.emplace_back(std::make_unique<NamedPipeListener<VRInputDataVersion::v1>>(
+      std::regex_replace(namedPipeConfiguration_.pipeName, std::regex("\\$version"), "v1"),
+      [&](VRInputDataVersion::v1* data) { callback_(static_cast<VRInputData>(*data)); }));
+
+  namedPipeListeners_.emplace_back(std::make_unique<NamedPipeListener<VRInputDataVersion::v2>>(
+      std::regex_replace(namedPipeConfiguration_.pipeName, std::regex("\\$version"), "v2"),
+      [&](VRInputDataVersion::v2* data) { callback_(static_cast<VRInputData>(*data)); }));
   return true;
 }
 
@@ -19,24 +25,28 @@ void NamedPipeCommunicationManager::BeginListener(const std::function<void(VRInp
     return;
   }
 
-  namedPipeListener_->StartListening([&](const VRInputData* data) { callback_(*data); });
+  for (const auto& listener : namedPipeListeners_) {
+    listener->StartListening();
+  }
 }
 
 bool NamedPipeCommunicationManager::DisconnectFromDevice() {
-  namedPipeListener_->StopListening();
+  for (const auto& listener : namedPipeListeners_) {
+    listener->StopListening();
+  }
   return true;
 }
 
 bool NamedPipeCommunicationManager::IsConnected() {
-  return namedPipeListener_->IsConnected();
+  return true;
 }
 
 void NamedPipeCommunicationManager::LogError(const char* message) {
   // message with port name and last error
-  DriverLog("%s (%s) - Error: %s", message, configuration_.pipeName.c_str(), GetLastErrorAsString().c_str());
+  DriverLog("%s (%s) - Error: %s", message, namedPipeConfiguration_.pipeName.c_str(), GetLastErrorAsString().c_str());
 }
 
 void NamedPipeCommunicationManager::LogMessage(const char* message) {
   // message with port name
-  DriverLog("%s (%s)", message, configuration_.pipeName.c_str());
+  DriverLog("%s (%s)", message, namedPipeConfiguration_.pipeName.c_str());
 }

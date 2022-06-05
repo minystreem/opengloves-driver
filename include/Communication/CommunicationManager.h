@@ -12,12 +12,12 @@
 
 class CommunicationManager {
  public:
-  explicit CommunicationManager(const VRDeviceConfiguration& deviceConfiguration);
-  CommunicationManager(std::unique_ptr<EncodingManager> encodingManager, const VRDeviceConfiguration& deviceConfiguration);
+  explicit CommunicationManager(VRCommunicationConfiguration configuration);
+  CommunicationManager(VRCommunicationConfiguration configuration, std::unique_ptr<EncodingManager> encodingManager);
 
   virtual void BeginListener(const std::function<void(VRInputData)>& callback);
   virtual void Disconnect();
-  virtual void QueueSend(const VRFFBData& data);
+  virtual void QueueSend(const VROutput& data);
 
   virtual bool IsConnected() = 0;
 
@@ -26,14 +26,16 @@ class CommunicationManager {
   virtual void WaitAttemptConnection();
 
   virtual bool Connect() = 0;
+
+  virtual void PrepareDisconnection(){};
   virtual bool DisconnectFromDevice() = 0;
   virtual void LogError(const char* message) = 0;
   virtual void LogMessage(const char* message) = 0;
   virtual bool ReceiveNextPacket(std::string& buff) = 0;
   virtual bool SendMessageToDevice() = 0;
 
+  VRCommunicationConfiguration configuration_;
   std::unique_ptr<EncodingManager> encodingManager_;
-  VRDeviceConfiguration deviceConfiguration_;
 
   std::atomic<bool> threadActive_;
   std::thread thread_;

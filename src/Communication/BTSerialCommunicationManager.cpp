@@ -10,11 +10,9 @@
 #include "Util/Windows.h"
 
 BTSerialCommunicationManager::BTSerialCommunicationManager(
-    std::unique_ptr<EncodingManager> encodingManager, const VRBTSerialConfiguration configuration, const VRDeviceConfiguration& deviceConfiguration)
-    : CommunicationManager(std::move(encodingManager), deviceConfiguration),
-      btSerialConfiguration_(configuration),
-      isConnected_(false),
-      btClientSocket_(NULL) {}
+    const VRCommunicationConfiguration& configuration, std::unique_ptr<EncodingManager> encodingManager)
+    : CommunicationManager(configuration, std::move(encodingManager)),
+      btSerialConfiguration_(std::get<VRCommunicationBTSerialConfiguration>(configuration.configuration)){};
 
 bool BTSerialCommunicationManager::IsConnected() {
   return isConnected_;
@@ -51,8 +49,12 @@ bool BTSerialCommunicationManager::ReceiveNextPacket(std::string& buff) {
   char nextChar = 0;
   do {
     const int receiveResult = recv(btClientSocket_, &nextChar, 1, 0);
-    if (receiveResult <= 0 || nextChar == '\n') continue;
 
+    if (receiveResult == SOCKET_ERROR) {
+      LogError("Socket error while receiving data over Bluetooth");
+      return false;
+    }
+    if (receiveResult <= 0 || nextChar == '\n') continue;
     buff += nextChar;
   } while (threadActive_ && (nextChar != '\n' || buff.length() < 1));
 
@@ -62,8 +64,6 @@ bool BTSerialCommunicationManager::ReceiveNextPacket(std::string& buff) {
 }
 
 bool BTSerialCommunicationManager::SendMessageToDevice() {
-  std::lock_guard lock(writeMutex_);
-
   const char* message = writeString_.c_str();
 
   if (!Retry([&]() { return send(btClientSocket_, message, static_cast<int>(writeString_.length()), 0) != SOCKET_ERROR; }, 5, 10)) {
@@ -91,12 +91,9 @@ bool BTSerialCommunicationManager::ConnectToDevice(const BTH_ADDR& deviceBtAddre
     return false;
   }
 
-  unsigned long nonBlockingMode = 1;
-  // set the socket to be non-blocking, meaning it will return right away when sending/receiving
-  if (ioctlsocket(btClientSocket_, FIONBIO, &nonBlockingMode) != 0) {
-    LogError("Could not set socket to be non-blocking");
-    return false;
-  }
+  DWORD timeout = 1000;
+  setsockopt(btClientSocket_, SOL_SOCKET, SO_RCVTIMEO, (char*)&timeout, sizeof(timeout));
+  setsockopt(btClientSocket_, SOL_SOCKET, SO_SNDTIMEO, (char*)&timeout, sizeof(timeout));
 
   return true;
 }
@@ -159,7 +156,7 @@ bool BTSerialCommunicationManager::StartupWindowsSocket() {
 
 void BTSerialCommunicationManager::LogError(const char* message) {
   // message with port name and last error
-  DriverLog("%s (%s) - Error: %s", message, btSerialConfiguration_.name.c_str(), GetLastErrorAsString().c_str());
+  DriverLog("%s (%s) - Error: %s - WSA: %d", message, btSerialConfiguration_.name.c_str(), GetLastErrorAsString().c_str(), WSAGetLastError());
 }
 
 void BTSerialCommunicationManager::LogMessage(const char* message) {
